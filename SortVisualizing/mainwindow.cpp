@@ -2,97 +2,26 @@
 #include "sortingalgorithms.h"
 #include <QRandomGenerator>
 #include <QDebug>
+#include <QBarCategoryAxis>
+#include <QValueAxis>
+#include <QTabWidget>
 
-MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), currentStep(0) {
-    // Central Widget and Main Layout
+MainWindow::MainWindow(QWidget *parent)
+    : QMainWindow(parent), currentStep(0), isCompareMode(false) {
+
+    // Create central widget and main layout
     centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
     mainLayout = new QVBoxLayout(centralWidget);
 
-    // Algorithm Selection
-    algorithmComboBox = new QComboBox(this);
-    algorithmComboBox->addItems(SortingAlgorithms::availableAlgorithms());
-    mainLayout->addWidget(new QLabel("Select Sorting Algorithm:"));
-    mainLayout->addWidget(algorithmComboBox);
+    // Create tab widget
+    tabWidget = new QTabWidget(this);
+    mainLayout->addWidget(tabWidget);
 
-    // Create horizontal layout for spinboxes
-    QHBoxLayout *spinBoxLayout = new QHBoxLayout();
+    // Create tabs for different modes
+    setupVisualizationTab();
+    setupComparisonTab();
 
-    // Size Selection Group
-    QVBoxLayout *sizeLayout = new QVBoxLayout();
-    sizeSpinBox = new QSpinBox(this);
-    sizeSpinBox->setRange(5, 100);
-    sizeSpinBox->setValue(20);
-    sizeSpinBox->setWrapping(false);
-    connect(sizeSpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
-            [this](int value) {
-                if (value > sizeSpinBox->maximum()) {
-                    sizeSpinBox->setValue(sizeSpinBox->maximum());
-                }
-            });
-    sizeLayout->addWidget(new QLabel("Number of Elements (Max 100):"));
-    sizeLayout->addWidget(sizeSpinBox);
-    spinBoxLayout->addLayout(sizeLayout);
-
-    // Delay Selection Group
-    QVBoxLayout *delayLayout = new QVBoxLayout();
-    delaySpinBox = new QSpinBox(this);
-    delaySpinBox->setRange(10, 1000);
-    delaySpinBox->setValue(100);
-    delaySpinBox->setSingleStep(10);
-    delaySpinBox->setWrapping(false);
-    connect(delaySpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
-            [this](int value) {
-                if (value > delaySpinBox->maximum()) {
-                    delaySpinBox->setValue(delaySpinBox->maximum());
-                }
-                updateSortDelay();
-            });
-    delayLayout->addWidget(new QLabel("Sorting Delay (ms):"));
-    delayLayout->addWidget(delaySpinBox);
-    spinBoxLayout->addLayout(delayLayout);
-
-    // Add spacing between the spinbox groups
-    spinBoxLayout->addSpacing(20);
-
-    // Add the spinbox layout to main layout
-    mainLayout->addLayout(spinBoxLayout);
-
-    // Ascending/Descending Selection
-    ascendingRadioButton = new QRadioButton("Ascending", this);
-    descendingRadioButton = new QRadioButton("Descending", this);
-    ascendingRadioButton->setChecked(true);
-
-    QHBoxLayout *radioLayout = new QHBoxLayout();
-    radioLayout->addWidget(new QLabel("Sorting Order:"));
-    radioLayout->addWidget(ascendingRadioButton);
-    radioLayout->addWidget(descendingRadioButton);
-    mainLayout->addLayout(radioLayout);
-
-    // Sorting Time Label
-    sortTimeLabel = new QLabel("Sorting Time: ", this);
-    mainLayout->addWidget(sortTimeLabel);
-
-    // Horizontal layout for buttons
-    QHBoxLayout *buttonLayout = new QHBoxLayout();
-
-    // Sort Button
-    sortButton = new QPushButton("Start Sorting", this);
-    buttonLayout->addWidget(sortButton);
-    connect(sortButton, &QPushButton::clicked, this, &MainWindow::startSorting);
-
-    // Randomize Button
-    QPushButton *randomizeButton = new QPushButton("Randomize Data", this);
-    buttonLayout->addWidget(randomizeButton);
-    connect(randomizeButton, &QPushButton::clicked, this, &MainWindow::randomizeData);
-
-    // Add button layout to main layout
-    mainLayout->addLayout(buttonLayout);
-
-    // Chart View
-    chartView = new QChartView(this);
-    chartView->setRenderHint(QPainter::Antialiasing);
-    mainLayout->addWidget(chartView);
 
     // Timer setup
     sortTimer = new QTimer(this);
@@ -100,9 +29,192 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), currentStep(0) {
 
     // Generate initial random data
     generateRandomData();
+
+    // Connect tab change signal
+    connect(tabWidget, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);
 }
 
 MainWindow::~MainWindow() {}
+
+void MainWindow::setupVisualizationTab() {
+    // Create visualization tab widget
+    QWidget* visualizationTab = new QWidget();
+    QVBoxLayout* visualizationLayout = new QVBoxLayout(visualizationTab);
+
+    // Algorithm Selection
+    algorithmComboBox = new QComboBox(this);
+    algorithmComboBox->addItems(SortingAlgorithms::availableAlgorithms());
+    visualizationLayout->addWidget(new QLabel("Select Sorting Algorithm:"));
+    visualizationLayout->addWidget(algorithmComboBox);
+
+    // Create horizontal layout for spinboxes
+    QHBoxLayout *spinBoxLayout = new QHBoxLayout();
+
+    // Size Selection Group
+    sizeSpinBox = new QSpinBox(this);
+    sizeSpinBox->setRange(5, 100);
+    sizeSpinBox->setValue(20);
+    sizeSpinBox->setWrapping(false);
+    spinBoxLayout->addWidget(new QLabel("Number of Elements:"));
+    spinBoxLayout->addWidget(sizeSpinBox);
+
+    // Delay Selection Group
+    delaySpinBox = new QSpinBox(this);
+    delaySpinBox->setRange(10, 1000);
+    delaySpinBox->setValue(100);
+    delaySpinBox->setSingleStep(10);
+    spinBoxLayout->addWidget(new QLabel("Sorting Delay (ms):"));
+    spinBoxLayout->addWidget(delaySpinBox);
+
+    visualizationLayout->addLayout(spinBoxLayout);
+
+    // Sorting Order
+    QHBoxLayout* orderLayout = new QHBoxLayout();
+    ascendingRadioButton = new QRadioButton("Ascending", this);
+    descendingRadioButton = new QRadioButton("Descending", this);
+    ascendingRadioButton->setChecked(true);
+    orderLayout->addWidget(new QLabel("Sort Order:"));
+    orderLayout->addWidget(ascendingRadioButton);
+    orderLayout->addWidget(descendingRadioButton);
+    visualizationLayout->addLayout(orderLayout);
+
+    // Buttons
+    QHBoxLayout* buttonLayout = new QHBoxLayout();
+    sortButton = new QPushButton("Start Sorting", this);
+    randomizeButton = new QPushButton("Randomize Data", this);
+    buttonLayout->addWidget(sortButton);
+    buttonLayout->addWidget(randomizeButton);
+    visualizationLayout->addLayout(buttonLayout);
+
+    // Time Label
+    sortTimeLabel = new QLabel("Sorting Time: ", this);
+    visualizationLayout->addWidget(sortTimeLabel);
+
+    // Chart View
+    chartView = new QChartView(this);
+    chartView->setRenderHint(QPainter::Antialiasing);
+    visualizationLayout->addWidget(chartView);
+
+    // Connect signals
+    connect(sortButton, &QPushButton::clicked, this, &MainWindow::startSorting);
+    connect(randomizeButton, &QPushButton::clicked, this, &MainWindow::randomizeData);
+    connect(delaySpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
+            this, &MainWindow::updateSortDelay);
+
+    tabWidget->addTab(visualizationTab, "Visualization");
+}
+
+void MainWindow::setupComparisonTab() {
+    // Create comparison tab widget
+    QWidget* comparisonTab = new QWidget();
+    QVBoxLayout* comparisonLayout = new QVBoxLayout(comparisonTab);
+
+    // Algorithm Selection
+    QHBoxLayout* algorithmsLayout = new QHBoxLayout();
+
+    // First Algorithm
+    QVBoxLayout* firstAlgoLayout = new QVBoxLayout();
+    algorithm1ComboBox = new QComboBox(this);
+    algorithm1ComboBox->addItems(SortingAlgorithms::availableAlgorithms());
+    firstAlgoLayout->addWidget(new QLabel("First Algorithm:"));
+    firstAlgoLayout->addWidget(algorithm1ComboBox);
+    algorithmsLayout->addLayout(firstAlgoLayout);
+
+    // Second Algorithm
+    QVBoxLayout* secondAlgoLayout = new QVBoxLayout();
+    algorithm2ComboBox = new QComboBox(this);
+    algorithm2ComboBox->addItems(SortingAlgorithms::availableAlgorithms());
+    secondAlgoLayout->addWidget(new QLabel("Second Algorithm:"));
+    secondAlgoLayout->addWidget(algorithm2ComboBox);
+    algorithmsLayout->addLayout(secondAlgoLayout);
+
+    comparisonLayout->addLayout(algorithmsLayout);
+
+    // Controls layout
+    QHBoxLayout* controlsLayout = new QHBoxLayout();
+
+    // Size Selection
+    QVBoxLayout* sizeLayout = new QVBoxLayout();
+    compareSpinBox = new QSpinBox(this);
+    compareSpinBox->setRange(5, 100);
+    compareSpinBox->setValue(20);
+    compareSpinBox->setWrapping(false);
+    sizeLayout->addWidget(new QLabel("Number of Elements:"));
+    sizeLayout->addWidget(compareSpinBox);
+    controlsLayout->addLayout(sizeLayout);
+
+    // Delay Selection
+    QVBoxLayout* delayLayout = new QVBoxLayout();
+    compareDelaySpinBox = new QSpinBox(this);
+    compareDelaySpinBox->setRange(10, 1000);
+    compareDelaySpinBox->setValue(100);
+    compareDelaySpinBox->setSingleStep(10);
+    delayLayout->addWidget(new QLabel("Sorting Delay (ms):"));
+    delayLayout->addWidget(compareDelaySpinBox);
+    controlsLayout->addLayout(delayLayout);
+    comparisonLayout->addLayout(controlsLayout);
+
+    // Buttons
+    QHBoxLayout* buttonLayout = new QHBoxLayout();
+    QPushButton* compareButton = new QPushButton("Start Comparison", this);
+    QPushButton* compareRandomizeButton = new QPushButton("Randomize Data", this);
+    buttonLayout->addWidget(compareButton);
+    buttonLayout->addWidget(compareRandomizeButton);
+    comparisonLayout->addLayout(buttonLayout);
+
+    // Charts Layout
+    QHBoxLayout* chartsLayout = new QHBoxLayout();
+
+    // Left Chart
+    leftChartView = new QChartView(this);
+    leftChartView->setRenderHint(QPainter::Antialiasing);
+    chartsLayout->addWidget(leftChartView);
+
+    // Right Chart
+    rightChartView = new QChartView(this);
+    rightChartView->setRenderHint(QPainter::Antialiasing);
+    chartsLayout->addWidget(rightChartView);
+
+    comparisonLayout->addLayout(chartsLayout);
+
+    // Results Label
+    compareTimeLabel = new QLabel("Comparison Results: ", this);
+    comparisonLayout->addWidget(compareTimeLabel);
+
+    // Connect signals
+    connect(compareButton, &QPushButton::clicked, this, &MainWindow::startComparison);
+    connect(compareRandomizeButton, &QPushButton::clicked, this, &MainWindow::randomizeData);
+    connect(compareSpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
+            [this](int value) {
+                sortTimer->setInterval(value);
+            });
+
+    tabWidget->addTab(comparisonTab, "Comparison");
+
+    // Hide the main chartView when in comparison mode
+    connect(tabWidget, &QTabWidget::currentChanged, [this](int index) {
+        chartView->setVisible(index == 0);  // Only show in visualization mode
+    });
+}
+
+
+void MainWindow::onTabChanged(int index) {
+    // Stop any ongoing sorting
+    sortTimer->stop();
+
+    // Update isCompareMode flag
+    isCompareMode = (index == 1);
+
+    // Clear previous results
+    if (index == 0) {
+        sortTimeLabel->setText("Sorting Time: ");
+    } else {
+        compareTimeLabel->setText("Comparison Results: ");
+    }
+
+    // Reset chart
+    generateRandomData();
+}
 
 void MainWindow::updateSortDelay() {
     sortTimer->setInterval(delaySpinBox->value());
@@ -161,24 +273,227 @@ void MainWindow::startSorting() {
     sortTimer->start(delaySpinBox->value());
 }
 
+void MainWindow::startComparison() {
+    // Disconnect any existing connections to prevent multiple connections
+    disconnect(sortTimer, &QTimer::timeout, this, &MainWindow::performNextStep);
+    disconnect(sortTimer, &QTimer::timeout, this, &MainWindow::performNextComparisonStep);
+
+    // Reset states
+    leftCurrentStep = rightCurrentStep = 0;
+    leftSortedIndices.clear();
+    rightSortedIndices.clear();
+    leftComparison = rightComparison = {-1, -1};
+    leftSteps.clear();
+    rightSteps.clear();
+
+    // Initialize data
+    leftData = data;
+    rightData = data;
+
+    QString alg1 = algorithm1ComboBox->currentText();
+    QString alg2 = algorithm2ComboBox->currentText();
+
+    std::vector<int> leftSortData = leftData;
+    std::vector<int> rightSortData = rightData;
+
+    // Calculate steps for first algorithm
+    if (alg1 == "Bubble Sort")
+        SortingAlgorithms::bubbleSort(leftSortData, true, leftSteps);
+    else if (alg1 == "Selection Sort")
+        SortingAlgorithms::selectionSort(leftSortData, true, leftSteps);
+    else if (alg1 == "Insertion Sort")
+        SortingAlgorithms::insertionSort(leftSortData, true, leftSteps);
+    else if (alg1 == "Quick Sort")
+        SortingAlgorithms::quickSort(leftSortData, true, leftSteps);
+    else if (alg1 == "Merge Sort") {
+        leftSteps.clear();
+        SortingAlgorithms::mergeSort(leftSortData, true, leftSteps);
+    }
+    else if (alg1 == "Heap Sort")
+        SortingAlgorithms::heapSort(leftSortData, true, leftSteps);
+    else if (alg1 == "Shell Sort")
+        SortingAlgorithms::shellSort(leftSortData, true, leftSteps);
+    else if (alg1 == "Counting Sort") {
+        leftSteps.clear();
+        SortingAlgorithms::countingSort(leftSortData, true, leftSteps);
+    }
+    else if (alg1 == "Radix Sort")
+        SortingAlgorithms::radixSort(leftSortData, true, leftSteps);
+    else if (alg1 == "Bucket Sort") {
+        leftSteps.clear();
+        SortingAlgorithms::bucketSort(leftSortData, true, leftSteps);
+    }
+
+    // Calculate steps for second algorithm (similar changes for rightSteps)
+    if (alg2 == "Bubble Sort")
+        SortingAlgorithms::bubbleSort(rightSortData, true, rightSteps);
+    else if (alg2 == "Selection Sort")
+        SortingAlgorithms::selectionSort(rightSortData, true, rightSteps);
+    else if (alg2 == "Insertion Sort")
+        SortingAlgorithms::insertionSort(rightSortData, true, rightSteps);
+    else if (alg2 == "Quick Sort")
+        SortingAlgorithms::quickSort(rightSortData, true, rightSteps);
+    else if (alg2 == "Merge Sort") {
+        rightSteps.clear();
+        SortingAlgorithms::mergeSort(rightSortData, true, rightSteps);
+    }
+    else if (alg2 == "Heap Sort")
+        SortingAlgorithms::heapSort(rightSortData, true, rightSteps);
+    else if (alg2 == "Shell Sort")
+        SortingAlgorithms::shellSort(rightSortData, true, rightSteps);
+    else if (alg2 == "Counting Sort") {
+        rightSteps.clear();
+        SortingAlgorithms::countingSort(rightSortData, true, rightSteps);
+    }
+    else if (alg2 == "Radix Sort")
+        SortingAlgorithms::radixSort(rightSortData, true, rightSteps);
+    else if (alg2 == "Bucket Sort") {
+        rightSteps.clear();
+        SortingAlgorithms::bucketSort(rightSortData, true, rightSteps);
+    }
+
+    leftSortedData = leftSortData;
+    rightSortedData = rightSortData;
+
+    // Connect and start the timer for visualization
+    sortTimer->start(compareSpinBox->value());
+    disconnect(sortTimer, &QTimer::timeout, this, &MainWindow::performNextStep);
+    connect(sortTimer, &QTimer::timeout, this, &MainWindow::performNextComparisonStep);
+
+    // Initial display
+    displayComparisonCharts();
+}
+
+void MainWindow::performNextComparisonStep() {
+    bool leftDone = false, rightDone = false;
+
+    // Left algorithm
+    if (leftCurrentStep < leftSteps.size()) {
+        auto [i, j] = leftSteps[leftCurrentStep++];
+        leftComparison = {i, j};
+        if (i < leftData.size() && j < leftData.size()) {
+            std::swap(leftData[i], leftData[j]);
+        }
+    } else {
+        leftDone = true;
+        leftComparison = {-1, -1};
+        if (!leftSortedIndices.empty()) {
+            leftSortedIndices.clear();
+            for (size_t i = 0; i < leftData.size(); ++i) {
+                leftSortedIndices.insert(i);
+            }
+        }
+    }
+
+    // Right algorithm
+    if (rightCurrentStep < rightSteps.size()) {
+        auto [i, j] = rightSteps[rightCurrentStep++];
+        rightComparison = {i, j};
+        if (i < rightData.size() && j < rightData.size()) {
+            std::swap(rightData[i], rightData[j]);
+        }
+    } else {
+        rightDone = true;
+        rightComparison = {-1, -1};
+        if (!rightSortedIndices.empty()) {
+            rightSortedIndices.clear();
+            for (size_t i = 0; i < rightData.size(); ++i) {
+                rightSortedIndices.insert(i);
+            }
+        }
+    }
+
+    displayComparisonCharts();
+
+    if (leftDone && rightDone) {
+        sortTimer->stop();
+        leftData = leftSortedData;
+        rightData = rightSortedData;
+        leftSortedIndices.clear();
+        rightSortedIndices.clear();
+        for (size_t i = 0; i < data.size(); ++i) {
+            leftSortedIndices.insert(i);
+            rightSortedIndices.insert(i);
+        }
+        displayComparisonCharts();
+    }
+}
+
+void MainWindow::displayComparisonCharts() {
+    // Create and update left chart
+    QBarSeries *leftSeries = new QBarSeries();
+    QChart *leftChart = new QChart();
+    leftChart->addSeries(leftSeries);
+
+    // Left bars
+    leftSeries->setBarWidth(0.95);
+    for (int i = 0; i < leftData.size(); ++i) {
+        QColor barColor = Qt::gray;
+        if (leftSortedIndices.count(i)) {
+            barColor = Qt::blue;
+        }
+        if (i == leftComparison.first || i == leftComparison.second) {
+            barColor = Qt::yellow;
+        }
+
+        QBarSet *barSet = new QBarSet("");
+        barSet->append(leftData[i]);
+        barSet->setColor(barColor);
+        leftSeries->append(barSet);
+    }
+
+    leftChart->setTitle(algorithm1ComboBox->currentText());
+    leftChart->setAnimationOptions(QChart::NoAnimation);
+    leftChart->createDefaultAxes();
+    leftChart->axes(Qt::Vertical).first()->setRange(0, 1000);
+    leftChart->axes(Qt::Horizontal).first()->setRange(0, 1);
+    leftChart->legend()->hide();
+    leftChartView->setChart(leftChart);
+
+    // Create and update right chart (similar to left)
+    QBarSeries *rightSeries = new QBarSeries();
+    QChart *rightChart = new QChart();
+    rightChart->addSeries(rightSeries);
+
+    // Right bars
+    rightSeries->setBarWidth(0.95);
+    for (int i = 0; i < rightData.size(); ++i) {
+        QColor barColor = Qt::gray;
+        if (rightSortedIndices.count(i)) {
+            barColor = Qt::blue;
+        }
+        if (i == rightComparison.first || i == rightComparison.second) {
+            barColor = Qt::yellow;
+        }
+
+        QBarSet *barSet = new QBarSet("");
+        barSet->append(rightData[i]);
+        barSet->setColor(barColor);
+        rightSeries->append(barSet);
+    }
+
+    rightChart->setTitle(algorithm2ComboBox->currentText());
+    rightChart->setAnimationOptions(QChart::NoAnimation);
+    rightChart->createDefaultAxes();
+    rightChart->axes(Qt::Vertical).first()->setRange(0, 1000);
+    rightChart->axes(Qt::Horizontal).first()->setRange(0, 1);
+    rightChart->legend()->hide();
+    rightChartView->setChart(rightChart);
+}
+
 void MainWindow::generateRandomData() {
     int size = sizeSpinBox->value();
     data.resize(size);
     for (int& value : data) {
         value = QRandomGenerator::global()->bounded(10, 1001);
     }
-    displayChart();
 }
 
 void MainWindow::displayChart() {
-    // Create a new bar series
     QBarSeries *series = new QBarSeries();
-
-    // Create a chart
     QChart *chart = new QChart();
     chart->addSeries(series);
 
-    // Color individual bars
     series->setBarWidth(0.95);
     for (int i = 0; i < data.size(); ++i) {
         QColor barColor = Qt::gray;
@@ -211,20 +526,35 @@ void MainWindow::displayChart() {
     chartView->setChart(chart);
     chartView->setContentsMargins(100, 100, 100, 100);
 }
-
 void MainWindow::randomizeData() {
-    // Stop any ongoing sorting
-    sortTimer->stop();
+    if (tabWidget->currentIndex() == 0) {
+        // Visualization mode
+        int size = sizeSpinBox->value();
+        sortTimer->stop();
 
-    // Clear sorting-related states
-    sortSteps.clear();
-    currentStep = 0;
-    sortedIndices.clear();
-    currentComparison = {-1, -1};
-    sortTimeLabel->setText("Sorting Time: ");  // Clear the sorting time
+        sortSteps.clear();
+        currentStep = 0;
+        sortedIndices.clear();  // This will make bars grey
+        currentComparison = {-1, -1};
+        previousComparison = {-1, -1};
 
-    // Generate new random data
-    generateRandomData();
+        data.resize(size);
+        for (int& value : data) {
+            value = QRandomGenerator::global()->bounded(10, 1001);
+        }
+        displayChart();
+    } else {
+        // Comparison mode
+        int size = compareSpinBox->value();
+        data.resize(size);
+        for (int& value : data) {
+            value = QRandomGenerator::global()->bounded(10, 1001);
+        }
+        leftData = rightData = data;
+        leftSortedIndices.clear();
+        rightSortedIndices.clear();
+        displayComparisonCharts();
+    }
 }
 
 void MainWindow::calculateSortSteps(const QString& algorithm, bool ascending) {
