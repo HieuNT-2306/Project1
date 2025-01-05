@@ -62,6 +62,7 @@ private:
     QChartView *chartView;
     QTimer *sortTimer;
     QElapsedTimer elapsedTimer;
+    QPushButton *compareButton;
 
     // Comparison graph component
     QChartView *leftChartView;
@@ -90,6 +91,7 @@ private:
     std::pair<int, int> previousComparison;
     int currentStep;
     bool isCompareMode;
+    bool isPaused;
 
     // Helper Methods
     void setupVisualizationTab();
@@ -98,6 +100,7 @@ private:
     void displayChart();
     void calculateSortSteps(const QString& algorithm, bool ascending);
     void randomizeData();
+    void togglePause();
 
     struct SortStats {
         int comparisons = 0;

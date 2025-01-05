@@ -7,7 +7,7 @@
 #include <QTabWidget>
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), currentStep(0), isCompareMode(false) {
+    : QMainWindow(parent), currentStep(0), isCompareMode(false), isPaused(false) {
 
     // Create central widget and main layout
     centralWidget = new QWidget(this);
@@ -81,6 +81,15 @@ void MainWindow::setupVisualizationTab() {
     // Buttons
     QHBoxLayout* buttonLayout = new QHBoxLayout();
     sortButton = new QPushButton("Start Sorting", this);
+    connect(sortButton, &QPushButton::clicked, this, [this]() {
+        if (!sortTimer->isActive() && !isPaused) {
+            startSorting();
+        } else {
+            togglePause();
+        }
+    });
+
+
     randomizeButton = new QPushButton("Randomize Data", this);
     buttonLayout->addWidget(sortButton);
     buttonLayout->addWidget(randomizeButton);
@@ -96,7 +105,6 @@ void MainWindow::setupVisualizationTab() {
     visualizationLayout->addWidget(chartView);
 
     // Connect signals
-    connect(sortButton, &QPushButton::clicked, this, &MainWindow::startSorting);
     connect(randomizeButton, &QPushButton::clicked, this, &MainWindow::randomizeData);
     connect(delaySpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
             this, &MainWindow::updateSortDelay);
@@ -156,7 +164,14 @@ void MainWindow::setupComparisonTab() {
 
     // Buttons
     QHBoxLayout* buttonLayout = new QHBoxLayout();
-    QPushButton* compareButton = new QPushButton("Start Comparison", this);
+    compareButton = new QPushButton("Start Comparison", this);
+    connect(compareButton, &QPushButton::clicked, this, [this]() {
+        if (!sortTimer->isActive() && !isPaused) {
+            startComparison();
+        } else {
+            togglePause();
+        }
+    });
     QPushButton* compareRandomizeButton = new QPushButton("Randomize Data", this);
     buttonLayout->addWidget(compareButton);
     buttonLayout->addWidget(compareRandomizeButton);
@@ -182,7 +197,6 @@ void MainWindow::setupComparisonTab() {
     comparisonLayout->addWidget(compareTimeLabel);
 
     // Connect signals
-    connect(compareButton, &QPushButton::clicked, this, &MainWindow::startComparison);
     connect(compareRandomizeButton, &QPushButton::clicked, this, &MainWindow::randomizeData);
     connect(compareSpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
             [this](int value) {
@@ -201,6 +215,11 @@ void MainWindow::setupComparisonTab() {
 void MainWindow::onTabChanged(int index) {
     // Stop any ongoing sorting
     sortTimer->stop();
+    isPaused = false;
+
+    // Reset button texts
+    sortButton->setText("Start Sorting");
+    compareButton->setText("Start Comparison");
 
     // Disconnect all timer connections
     disconnect(sortTimer, &QTimer::timeout, this, &MainWindow::performNextStep);
@@ -239,6 +258,15 @@ void MainWindow::updateSortDelay() {
 }
 
 void MainWindow::startSorting() {
+    if (isPaused) {
+        // If paused, just resume the timer
+        sortTimer->start(delaySpinBox->value());
+        sortButton->setText("Pause Sorting");
+        isPaused = false;
+        return;
+    }
+
+
     // Start timing
     elapsedTimer.start();
 
@@ -290,11 +318,23 @@ void MainWindow::startSorting() {
     sortedData = sortData;
     elapsedTimer.start();
 
+
     // Start the timer for visualization
+    sortTimer->start(delaySpinBox->value());
+
+    isPaused = false;
+    sortButton->setText("Pause Sorting");
     sortTimer->start(delaySpinBox->value());
 }
 
 void MainWindow::startComparison() {
+    if (isPaused) {
+        // If paused, just resume the timer
+        sortTimer->start(compareDelaySpinBox->value());
+        compareButton->setText("Pause Comparison");
+        isPaused = false;
+        return;
+    }
     // Disconnect any existing connections to prevent multiple connections
     disconnect(sortTimer, &QTimer::timeout, this, &MainWindow::performNextStep);
     disconnect(sortTimer, &QTimer::timeout, this, &MainWindow::performNextComparisonStep);
@@ -386,7 +426,34 @@ void MainWindow::startComparison() {
 
     // Initial display
     displayComparisonCharts();
+
+    isPaused = false;
+    compareButton->setText("Pause Comparison");
+    sortTimer->start(compareDelaySpinBox->value());
+
 }
+
+void MainWindow::togglePause() {
+    isPaused = !isPaused;
+    if (isPaused) {
+        sortTimer->stop();
+        if (isCompareMode) {
+            compareButton->setText("Resume Comparison");
+        } else {
+            sortButton->setText("Resume Sorting");
+        }
+    } else {
+        if (isCompareMode) {
+            sortTimer->start(compareDelaySpinBox->value());
+            compareButton->setText("Pause Comparison");
+        } else {
+            sortTimer->start(delaySpinBox->value());
+            sortButton->setText("Pause Sorting");
+        }
+    }
+}
+
+
 void MainWindow::performNextComparisonStep() {
     bool leftDone = false, rightDone = false;
 
@@ -570,6 +637,14 @@ void MainWindow::randomizeData() {
         // Visualization mode
         int size = sizeSpinBox->value();
         sortTimer->stop();
+        isPaused = false;
+
+        // Reset button texts
+        if (tabWidget->currentIndex() == 0) {
+            sortButton->setText("Start Sorting");
+        } else {
+            compareButton->setText("Start Comparison");
+        }
 
         sortSteps.clear();
         currentStep = 0;
