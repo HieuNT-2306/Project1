@@ -98,6 +98,12 @@ private:
     void displayChart();
     void calculateSortSteps(const QString& algorithm, bool ascending);
     void randomizeData();
+
+    struct SortStats {
+        int comparisons = 0;
+        int swaps = 0;
+        qint64 time = 0;
+    };
 };
 
 #endif // MAINWINDOW_H

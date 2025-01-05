@@ -202,18 +202,36 @@ void MainWindow::onTabChanged(int index) {
     // Stop any ongoing sorting
     sortTimer->stop();
 
+    // Disconnect all timer connections
+    disconnect(sortTimer, &QTimer::timeout, this, &MainWindow::performNextStep);
+    disconnect(sortTimer, &QTimer::timeout, this, &MainWindow::performNextComparisonStep);
+
     // Update isCompareMode flag
     isCompareMode = (index == 1);
 
-    // Clear previous results
-    if (index == 0) {
+    // Connect appropriate timer signal based on current tab
+    if (index == 0) {  // Visualization tab
+        connect(sortTimer, &QTimer::timeout, this, &MainWindow::performNextStep);
         sortTimeLabel->setText("Sorting Time: ");
-    } else {
+    } else {  // Comparison tab
+        connect(sortTimer, &QTimer::timeout, this, &MainWindow::performNextComparisonStep);
         compareTimeLabel->setText("Comparison Results: ");
     }
 
+    // Reset chart and states
+    sortedIndices.clear();
+    currentComparison = {-1, -1};
+    previousComparison = {-1, -1};
+    currentStep = 0;
+    sortSteps.clear();
+
     // Reset chart
     generateRandomData();
+    if (index == 0) {
+        displayChart();
+    } else {
+        displayComparisonCharts();
+    }
 }
 
 void MainWindow::updateSortDelay() {
@@ -226,6 +244,7 @@ void MainWindow::startSorting() {
 
     // Create a copy of the data to preserve the original random array
     std::vector<int> sortData = data;
+    SortStats stats;
 
     QString algorithm = algorithmComboBox->currentText();
     bool ascending = ascendingRadioButton->isChecked();
@@ -239,35 +258,37 @@ void MainWindow::startSorting() {
 
     // Calculate sort steps on the copied data
     if (algorithm == "Bubble Sort") {
-        SortingAlgorithms::bubbleSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::bubbleSort(sortData, ascending, sortSteps, stats.comparisons, stats.swaps);
     } else if (algorithm == "Selection Sort") {
-        SortingAlgorithms::selectionSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::selectionSort(sortData, ascending, sortSteps, stats.comparisons, stats.swaps);
     } else if (algorithm == "Insertion Sort") {
-        SortingAlgorithms::insertionSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::insertionSort(sortData, ascending, sortSteps, stats.comparisons, stats.swaps);
     } else if (algorithm == "Quick Sort") {
-        SortingAlgorithms::quickSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::quickSort(sortData, ascending, sortSteps, stats.comparisons, stats.swaps);
     } else if (algorithm == "Merge Sort") {
-        SortingAlgorithms::mergeSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::mergeSort(sortData, ascending, sortSteps, stats.comparisons, stats.swaps);
     } else if (algorithm == "Heap Sort") {
-        SortingAlgorithms::heapSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::heapSort(sortData, ascending, sortSteps, stats.comparisons, stats.swaps);
     } else if (algorithm == "Shell Sort") {
-        SortingAlgorithms::shellSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::shellSort(sortData, ascending, sortSteps, stats.comparisons, stats.swaps);
     } else if (algorithm == "Counting Sort") {
-        SortingAlgorithms::countingSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::countingSort(sortData, ascending, sortSteps, stats.comparisons, stats.swaps);
     } else if (algorithm == "Radix Sort") {
-        SortingAlgorithms::radixSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::radixSort(sortData, ascending, sortSteps, stats.comparisons, stats.swaps);
     } else if (algorithm == "Bucket Sort") {
-        SortingAlgorithms::bucketSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::bucketSort(sortData, ascending, sortSteps, stats.comparisons, stats.swaps);
     }
 
     // Calculate and display sorting time
     qint64 elapsed = elapsedTimer.elapsed();
-    sortTimeLabel->setText(QString("Sorting Time (%1): %2 ms")
+    sortTimeLabel->setText(QString("%1: Comparisons: %3 - Swaps: %4 - Visualization Time: Running...")
                                .arg(algorithm)
-                               .arg(elapsed));
+                               .arg(stats.comparisons)
+                               .arg(stats.swaps));
 
     // Store the final sorted state
     sortedData = sortData;
+    elapsedTimer.start();
 
     // Start the timer for visualization
     sortTimer->start(delaySpinBox->value());
@@ -292,70 +313,73 @@ void MainWindow::startComparison() {
 
     QString alg1 = algorithm1ComboBox->currentText();
     QString alg2 = algorithm2ComboBox->currentText();
+    SortStats stats1, stats2;
 
     std::vector<int> leftSortData = leftData;
     std::vector<int> rightSortData = rightData;
 
-    // Calculate steps for first algorithm
     if (alg1 == "Bubble Sort")
-        SortingAlgorithms::bubbleSort(leftSortData, true, leftSteps);
+        SortingAlgorithms::bubbleSort(leftSortData, true, leftSteps, stats1.comparisons, stats1.swaps);
     else if (alg1 == "Selection Sort")
-        SortingAlgorithms::selectionSort(leftSortData, true, leftSteps);
+        SortingAlgorithms::selectionSort(leftSortData, true, leftSteps, stats1.comparisons, stats1.swaps);
     else if (alg1 == "Insertion Sort")
-        SortingAlgorithms::insertionSort(leftSortData, true, leftSteps);
+        SortingAlgorithms::insertionSort(leftSortData, true, leftSteps, stats1.comparisons, stats1.swaps);
     else if (alg1 == "Quick Sort")
-        SortingAlgorithms::quickSort(leftSortData, true, leftSteps);
+        SortingAlgorithms::quickSort(leftSortData, true, leftSteps, stats1.comparisons, stats1.swaps);
     else if (alg1 == "Merge Sort") {
         leftSteps.clear();
-        SortingAlgorithms::mergeSort(leftSortData, true, leftSteps);
+        SortingAlgorithms::mergeSort(leftSortData, true, leftSteps, stats1.comparisons, stats1.swaps);
     }
     else if (alg1 == "Heap Sort")
-        SortingAlgorithms::heapSort(leftSortData, true, leftSteps);
+        SortingAlgorithms::heapSort(leftSortData, true, leftSteps, stats1.comparisons, stats1.swaps);
     else if (alg1 == "Shell Sort")
-        SortingAlgorithms::shellSort(leftSortData, true, leftSteps);
+        SortingAlgorithms::shellSort(leftSortData, true, leftSteps, stats1.comparisons, stats1.swaps);
     else if (alg1 == "Counting Sort") {
         leftSteps.clear();
-        SortingAlgorithms::countingSort(leftSortData, true, leftSteps);
+        SortingAlgorithms::countingSort(leftSortData, true, leftSteps, stats1.comparisons, stats1.swaps);
     }
     else if (alg1 == "Radix Sort")
-        SortingAlgorithms::radixSort(leftSortData, true, leftSteps);
+        SortingAlgorithms::radixSort(leftSortData, true, leftSteps, stats1.comparisons, stats1.swaps);
     else if (alg1 == "Bucket Sort") {
         leftSteps.clear();
-        SortingAlgorithms::bucketSort(leftSortData, true, leftSteps);
+        SortingAlgorithms::bucketSort(leftSortData, true, leftSteps, stats1.comparisons, stats1.swaps);
     }
 
-    // Calculate steps for second algorithm (similar changes for rightSteps)
     if (alg2 == "Bubble Sort")
-        SortingAlgorithms::bubbleSort(rightSortData, true, rightSteps);
+        SortingAlgorithms::bubbleSort(rightSortData, true, rightSteps, stats2.comparisons, stats2.swaps);
     else if (alg2 == "Selection Sort")
-        SortingAlgorithms::selectionSort(rightSortData, true, rightSteps);
+        SortingAlgorithms::selectionSort(rightSortData, true, rightSteps, stats2.comparisons, stats2.swaps);
     else if (alg2 == "Insertion Sort")
-        SortingAlgorithms::insertionSort(rightSortData, true, rightSteps);
+        SortingAlgorithms::insertionSort(rightSortData, true, rightSteps, stats2.comparisons, stats2.swaps);
     else if (alg2 == "Quick Sort")
-        SortingAlgorithms::quickSort(rightSortData, true, rightSteps);
+        SortingAlgorithms::quickSort(rightSortData, true, rightSteps, stats2.comparisons, stats2.swaps);
     else if (alg2 == "Merge Sort") {
         rightSteps.clear();
-        SortingAlgorithms::mergeSort(rightSortData, true, rightSteps);
+        SortingAlgorithms::mergeSort(rightSortData, true, rightSteps, stats2.comparisons, stats2.swaps);
     }
     else if (alg2 == "Heap Sort")
-        SortingAlgorithms::heapSort(rightSortData, true, rightSteps);
+        SortingAlgorithms::heapSort(rightSortData, true, rightSteps, stats2.comparisons, stats2.swaps);
     else if (alg2 == "Shell Sort")
-        SortingAlgorithms::shellSort(rightSortData, true, rightSteps);
+        SortingAlgorithms::shellSort(rightSortData, true, rightSteps, stats2.comparisons, stats2.swaps);
     else if (alg2 == "Counting Sort") {
         rightSteps.clear();
-        SortingAlgorithms::countingSort(rightSortData, true, rightSteps);
+        SortingAlgorithms::countingSort(rightSortData, true, rightSteps, stats2.comparisons, stats2.swaps);
     }
     else if (alg2 == "Radix Sort")
-        SortingAlgorithms::radixSort(rightSortData, true, rightSteps);
+        SortingAlgorithms::radixSort(rightSortData, true, rightSteps, stats2.comparisons, stats2.swaps);
     else if (alg2 == "Bucket Sort") {
         rightSteps.clear();
-        SortingAlgorithms::bucketSort(rightSortData, true, rightSteps);
+        SortingAlgorithms::bucketSort(rightSortData, true, rightSteps, stats2.comparisons, stats2.swaps);
     }
 
     leftSortedData = leftSortData;
     rightSortedData = rightSortData;
 
     // Connect and start the timer for visualization
+    elapsedTimer.start();
+    compareTimeLabel->setText(QString("%1: Comparisons: %2 - Swaps: %3 - Visualization Time: Running...\n\n%4: Comparisons: %5 - Swaps: %6 - Visualization Time: Running...")
+                                  .arg(alg1).arg(stats1.comparisons).arg(stats1.swaps)
+                                  .arg(alg2).arg(stats2.comparisons).arg(stats2.swaps));
     sortTimer->start(compareSpinBox->value());
     disconnect(sortTimer, &QTimer::timeout, this, &MainWindow::performNextStep);
     connect(sortTimer, &QTimer::timeout, this, &MainWindow::performNextComparisonStep);
@@ -363,7 +387,6 @@ void MainWindow::startComparison() {
     // Initial display
     displayComparisonCharts();
 }
-
 void MainWindow::performNextComparisonStep() {
     bool leftDone = false, rightDone = false;
 
@@ -374,15 +397,28 @@ void MainWindow::performNextComparisonStep() {
         if (i < leftData.size() && j < leftData.size()) {
             std::swap(leftData[i], leftData[j]);
         }
-    } else {
-        leftDone = true;
-        leftComparison = {-1, -1};
-        if (!leftSortedIndices.empty()) {
-            leftSortedIndices.clear();
+
+        // Check if this algorithm is done with all steps
+        if (leftCurrentStep >= leftSteps.size()) {
+            leftDone = true;
+            leftComparison = {-1, -1};
+            // Set the final sorted state
+            leftData = leftSortedData;
             for (size_t i = 0; i < leftData.size(); ++i) {
                 leftSortedIndices.insert(i);
             }
+            // Update time
+            qint64 leftTime = elapsedTimer.elapsed();
+            QString currentText = compareTimeLabel->text();
+            if (currentText.contains("Running...")) {
+                int runningIndex = currentText.indexOf("Running...");
+                currentText.replace(runningIndex, 10, QString("%1 ms").arg(leftTime));
+                compareTimeLabel->setText(currentText);
+            }
         }
+    } else {
+        leftDone = true;
+        leftComparison = {-1, -1};
     }
 
     // Right algorithm
@@ -392,33 +428,36 @@ void MainWindow::performNextComparisonStep() {
         if (i < rightData.size() && j < rightData.size()) {
             std::swap(rightData[i], rightData[j]);
         }
-    } else {
-        rightDone = true;
-        rightComparison = {-1, -1};
-        if (!rightSortedIndices.empty()) {
-            rightSortedIndices.clear();
+
+        // Check if this algorithm is done with all steps
+        if (rightCurrentStep >= rightSteps.size()) {
+            rightDone = true;
+            rightComparison = {-1, -1};
+            // Set the final sorted state
+            rightData = rightSortedData;
             for (size_t i = 0; i < rightData.size(); ++i) {
                 rightSortedIndices.insert(i);
             }
+            // Update time
+            qint64 rightTime = elapsedTimer.elapsed();
+            QString currentText = compareTimeLabel->text();
+            if (currentText.contains("Running...")) {
+                int runningIndex = currentText.lastIndexOf("Running...");
+                currentText.replace(runningIndex, 10, QString("%1 ms").arg(rightTime));
+                compareTimeLabel->setText(currentText);
+            }
         }
+    } else {
+        rightDone = true;
+        rightComparison = {-1, -1};
     }
 
     displayComparisonCharts();
 
     if (leftDone && rightDone) {
         sortTimer->stop();
-        leftData = leftSortedData;
-        rightData = rightSortedData;
-        leftSortedIndices.clear();
-        rightSortedIndices.clear();
-        for (size_t i = 0; i < data.size(); ++i) {
-            leftSortedIndices.insert(i);
-            rightSortedIndices.insert(i);
-        }
-        displayComparisonCharts();
     }
 }
-
 void MainWindow::displayComparisonCharts() {
     // Create and update left chart
     QBarSeries *leftSeries = new QBarSeries();
@@ -560,28 +599,35 @@ void MainWindow::randomizeData() {
 void MainWindow::calculateSortSteps(const QString& algorithm, bool ascending) {
     sortSteps.clear();
     std::vector<int> sortData = data;  // Create a copy to avoid modifying original data
+    int comparisons = 0;
+    int swaps = 0;
 
     if (algorithm == "Bubble Sort") {
-        SortingAlgorithms::bubbleSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::bubbleSort(sortData, ascending, sortSteps, comparisons, swaps);
     } else if (algorithm == "Selection Sort") {
-        SortingAlgorithms::selectionSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::selectionSort(sortData, ascending, sortSteps, comparisons, swaps);
     } else if (algorithm == "Insertion Sort") {
-        SortingAlgorithms::insertionSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::insertionSort(sortData, ascending, sortSteps, comparisons, swaps);
     } else if (algorithm == "Quick Sort") {
-        SortingAlgorithms::quickSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::quickSort(sortData, ascending, sortSteps, comparisons, swaps);
     } else if (algorithm == "Merge Sort") {
-        SortingAlgorithms::mergeSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::mergeSort(sortData, ascending, sortSteps, comparisons, swaps);
     } else if (algorithm == "Heap Sort") {
-        SortingAlgorithms::heapSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::heapSort(sortData, ascending, sortSteps, comparisons, swaps);
     } else if (algorithm == "Shell Sort") {
-        SortingAlgorithms::shellSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::shellSort(sortData, ascending, sortSteps, comparisons, swaps);
     } else if (algorithm == "Counting Sort") {
-        SortingAlgorithms::countingSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::countingSort(sortData, ascending, sortSteps, comparisons, swaps);
     } else if (algorithm == "Radix Sort") {
-        SortingAlgorithms::radixSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::radixSort(sortData, ascending, sortSteps, comparisons, swaps);
     } else if (algorithm == "Bucket Sort") {
-        SortingAlgorithms::bucketSort(sortData, ascending, sortSteps);
+        SortingAlgorithms::bucketSort(sortData, ascending, sortSteps, comparisons, swaps);
     }
+
+    sortTimeLabel->setText(QString("%1:\nComparisons: %2\nSwaps: %3")
+                               .arg(algorithm)
+                               .arg(comparisons)
+                               .arg(swaps));
 }
 
 void MainWindow::performNextStep() {
@@ -623,11 +669,16 @@ void MainWindow::performNextStep() {
             sortedIndices.insert(i);
         }
 
+
         // Reset comparisons
         currentComparison = {-1, -1};
         previousComparison = {-1, -1};
 
         displayChart();
         sortTimer->stop();
+        qint64 elapsed = elapsedTimer.elapsed();
+        QString currentText = sortTimeLabel->text();
+        QString updatedText = currentText.replace("Running...", QString("%1 ms").arg(elapsed));
+        sortTimeLabel->setText(updatedText);
     }
 }
